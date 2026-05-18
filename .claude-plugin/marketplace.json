@@ -1,0 +1,22 @@
+{
+  "name": "sql-skill",
+  "owner": {
+    "name": "Wjg-Ares"
+  },
+  "metadata": {
+    "description": "SQL 查询与数据库校验 — 通过 MCP 操作主流关系型数据库，支持自然语言查询、表结构管理、自动化测试校验",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "sql-skill",
+      "description": "SQL 查询与数据库校验技能集，含 /sql（查询与表结构管理）和 /sqltest（数据库校验引擎）",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./skills/sql",
+        "./skills/sqltest"
+      ]
+    }
+  ]
+}
