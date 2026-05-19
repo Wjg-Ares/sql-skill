@@ -3,6 +3,9 @@ name: sqltest
 description: 数据库校验引擎。执行自动化测试用例（前置SQL → HTTP请求 → 校验SQL → 清理），提供原子化的 SQL 执行和用例验证能力，可被自动化测试技能编排。
 ---
 
+<!-- api-base-url: http://localhost:5000 -->
+<!-- token-url: (none) -->
+
 # /sqltest — 数据库校验引擎
 
 ## 命令路由
@@ -15,6 +18,7 @@ description: 数据库校验引擎。执行自动化测试用例（前置SQL →
 | `/sqltest verify <用例名>` | 执行单条完整用例，返回结构化 pass/fail | 自动化 skill |
 | `/sqltest exec "<SQL>"` | 执行一条 SQL，返回原始 MCP 结果 | 自动化 skill |
 | `/sqltest config api-url <url>` | 设置 API 基地址 | 人 |
+| `/sqltest config token-url <method> <url>` | 设置 Token 获取方式 | 人 |
 
 ---
 
@@ -69,6 +73,36 @@ description: 数据库校验引擎。执行自动化测试用例（前置SQL →
 
 对每个匹配的用例：
 
+#### Step 0: 获取 Token（如已配置）
+
+读取本 SKILL.md 顶部的 `<!-- token-url: ... -->` 标记。
+
+如果标记为 `(none)` 或不存在，跳过此步骤——HTTP 请求不携带 Authorization 头。
+
+如果标记不为 `(none)`，格式为 `<!-- token-url: METHOD URL -->`。
+
+**注意：** Token 在批量执行（`run all`）时只获取一次，后续用例复用同一个 token。只有 token 过期（接口返回 401）时才重新获取。
+
+**获取 Token（Bash/curl）：**
+
+```bash
+curl -sk -X <METHOD> "<URL>" --connect-timeout 15 2>&1
+```
+
+- `-k` — 跳过 SSL 证书验证（自签名证书场景）
+- `-s` — 静默模式，不显示进度条
+- `--connect-timeout 15` — 连接超时 15 秒
+
+解析返回的 JSON，提取 `data.AccessToken` 作为 token。
+
+**如果获取失败（curl 报错或返回空）：** 标记为 ❌ FAIL，输出 `原因: 获取 Token 失败 - <错误信息>`，跳过该用例。
+
+**如果返回 JSON 中 `success` 为 false：** 标记为 ❌ FAIL，输出 `原因: 获取 Token 失败 - <msg>`。
+
+**Token 过期处理：** 如果后续 HTTP 请求返回 401，重新获取一次 token 并重试请求。如果仍然 401，标记为 ❌ FAIL。
+
+---
+
 #### Step 1: 执行前置 SQL
 
 通过 MCP 执行前置 SQL。入参格式：
@@ -109,12 +143,37 @@ description: 数据库校验引擎。执行自动化测试用例（前置SQL →
 
 API 基地址：读取本 SKILL.md 顶部 `<!-- api-base-url: http://localhost:5000 -->` 标记，无标记默认 `http://localhost:5000`。
 
+**GET 请求：** 如果 Query 参数在用例中单独列出（如 `> Query: ?keyword=杭州`），拼接到 URL 后。
+
+**请求头：** 如果 Step 0 已获取 token，添加 `Authorization: Bearer <token>` 头。
+
+**URL 编码规则：** 如果 Query 参数值中含有中文或特殊字符，必须进行 URL 编码。使用以下逻辑：
+
+PowerShell（未编码时）：
+```powershell
+Add-Type -AssemblyName System.Web
+```
+
+然后对 Query 参数值使用 `[System.Web.HttpUtility]::UrlEncode(<参数值>)` 进行编码。
+
+**已编码检测规则：** 如果参数值本身就包含 `%` 且后跟两位十六进制数字（如 `%E6%9D%AD`），说明用户已经手动编码，不再重复编码。检测方法：检查是否匹配正则 `%[0-9A-Fa-f]{2}`。
+
 执行请求（PowerShell）：
 
 ```powershell
+[System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
+
 $body = '<替换后的 JSON>'
+$headers = @{}
+<if token:>$headers["Authorization"] = "Bearer <token>"
+</if>
 try {
-    $response = Invoke-WebRequest -Uri "<基地址>/path" -Method <METHOD> -Body $body -ContentType "application/json"
+    if ($body) {
+        $response = Invoke-WebRequest -Uri "<基地址>/path" -Method <METHOD> -Body $body -ContentType "application/json" -Headers $headers -TimeoutSec 30
+    } else {
+        $response = Invoke-WebRequest -Uri "<基地址>/path" -Method <METHOD> -Headers $headers -TimeoutSec 30
+    }
     Write-Host "STATUS:$($response.StatusCode)"
     Write-Host "BODY:$($response.Content)"
 } catch {
@@ -303,6 +362,32 @@ SKIP|TC003|POST /api/Contract/GetList|查询合同列表|前置SQL返回空
 
 ---
 
+## Token 获取配置
+
+本 SKILL.md 顶部可标记 Token 获取方式：
+```
+<!-- token-url: POST https://d40.lis-china.com:18801/api/Account/GetIssueTokenInfo?userNo=LIS3&tokenGuid=123123&moduleId=H127&callModuleId=H127 -->
+```
+
+如果标记为 `(none)`，跳过 Token 获取，HTTP 请求不携带 Authorization 头。
+
+如果用户需要修改 Token 获取方式：
+
+```
+/sqltest config token-url POST "https://d40.lis-china.com:18801/api/Account/GetIssueTokenInfo?userNo=admin&tokenGuid=abc&moduleId=H127&callModuleId=H127"
+```
+
+格式：`/sqltest config token-url <METHOD> <URL>`
+
+- METHOD: GET 或 POST
+- URL: 完整的 Token 获取地址（含 query string）
+
+使用 Edit 工具更新标记中的 METHOD 和 URL。
+
+Token 响应要求：返回 JSON 格式 `{"success": true, "data": {"AccessToken": "xxx"}}`，`/sqltest` 自动提取 `data.AccessToken` 作为 Bearer token。
+
+---
+
 ## 错误处理
 
 | 错误场景 | 处理方式 |
@@ -313,3 +398,5 @@ SKIP|TC003|POST /api/Contract/GetList|查询合同列表|前置SQL返回空
 | HTTP 请求超时 | `❌ HTTP 请求超时，请确认 API 服务已启动` |
 | 前置 SQL 返回空 | `⚠️ SKIP`，不阻塞后续用例 |
 | 清理 SQL 执行失败 | 输出警告但不影响用例结果判定 |
+| Token 获取失败 | `❌ 获取 Token 失败 - <错误信息>`，跳过该用例 |
+| HTTP 返回 401 | 重新获取 token 并重试一次；仍 401 则 `❌ FAIL` |
