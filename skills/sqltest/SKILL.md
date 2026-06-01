@@ -20,6 +20,7 @@ description: 数据库校验引擎。执行自动化测试用例（前置SQL →
 | `/sqltest exec "<SQL>"` | 执行一条 SQL，返回原始 MCP 结果 | 自动化 skill |
 | `/sqltest config api-url <url>` | 设置 API 基地址 | 人 |
 | `/sqltest config token-url <method> <url>` | 设置 Token 获取方式 | 人 |
+| `/sqltest version` | 查看版本号 | 人 |
 
 ---
 
@@ -576,6 +577,22 @@ SKIP|TC003|POST /api/Contract/GetList|查询合同列表|前置SQL返回空
 **DML 安全确认：** 非 SELECT 语句执行前展示 SQL 并询问 `⚠️ 非查询操作，是否执行？（y/n）`。SELECT 直接执行。
 
 返回原始 MCP JSON，不添加任何格式。
+
+---
+
+## 模式 5: `/sqltest version`
+
+读取 `.claude-plugin/marketplace.json`，提取 `metadata.version` 字段展示：
+
+```
+sqltest v2.0.0 (sql-skill)
+```
+
+如果 marketplace.json 不存在（非 GitHub 安装方式），从本 SKILL.md 的系统标记读取：
+
+```
+sqltest v2.0.0
+```
 
 ---
 
