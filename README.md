@@ -13,7 +13,7 @@ npx skills add Wjg-Ares/sql-skill
 | 技能 | 用途 |
 |---|---|
 | `/sql` | SQL 查询与表结构管理 — setup 配置、直接 SQL、自然语言查询、连接管理 |
-| `/sqltest` | 数据库校验引擎 — 前置SQL → HTTP请求 → 校验SQL → 清理，可被自动化测试编排 |
+| `/sqltest` | 数据库校验引擎（Harness）— DAG 依赖编排、并行分层执行、对抗验证、前置SQL→HTTP→校验SQL→清理 |
 
 ## 首次使用
 
